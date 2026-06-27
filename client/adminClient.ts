@@ -402,8 +402,8 @@ export const createAdminPremiumJob = async (
       {
         ...payload,
         published_at: new Date().toISOString(),
-        company_id: "11b08302-3147-4c7c-8514-13d30ca256a2",
-        posted_by: "11b08302-3147-4c7c-8514-13d30ca256a2",
+        company_id: "cdd5bb29-4baa-4b24-a512-656c98032cca",
+        posted_by: "cdd5bb29-4baa-4b24-a512-656c98032cca",
         status: JobStatus.Active,
       },
     ])

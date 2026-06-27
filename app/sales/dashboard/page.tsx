@@ -28,7 +28,7 @@ function CodeShareCard({ code }: { code: string }) {
   // Built on the client so it always matches whatever domain this is hosted on
   const shareLink =
     typeof window !== "undefined"
-      ? `${window.location.origin}/premium?ref=${code}`
+      ? `https://sde-jobs.vercel.app/premium?ref=${code}`
       : "";
 
   const copyCode = () => {
