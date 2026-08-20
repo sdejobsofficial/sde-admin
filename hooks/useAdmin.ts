@@ -102,7 +102,10 @@ export const useDeleteAdminUser = () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "jobSeekers"] });
       toast.success("User deleted.");
     },
-    onError: () => toast.error("Failed to delete user."),
+    onError: (err: any) => {
+      const msg = err?.message ?? "Failed to delete user.";
+      toast.error(msg);
+    },
   });
 };
 

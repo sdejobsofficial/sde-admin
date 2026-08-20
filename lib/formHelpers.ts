@@ -79,7 +79,18 @@ export const companySchema = z.object({
     twitter: z.union([z.string().url("Enter a valid URL"), z.literal("")]),
     portfolio: z.union([z.string().url("Enter a valid URL"), z.literal("")]),
   }),
-  external_apply_url: z.string().url("Enter a valid apply URL"),
+  external_apply_url: z.string().refine((v) => {
+    if (!v) return true; // allow empty
+    // plain email like work@diacto.com
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (emailRegex.test(v)) return true;
+    try {
+      const u = new URL(v);
+      return ["http:", "https:", "mailto:"].includes(u.protocol);
+    } catch (e) {
+      return false;
+    }
+  }, { message: "Enter a valid apply URL or email address" }),
   application_deadline: z.string().optional(),
 });
 

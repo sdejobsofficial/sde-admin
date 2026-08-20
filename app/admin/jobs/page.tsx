@@ -280,7 +280,13 @@ function DetailModal({
           {/* External apply link */}
           {job.ExternalApplyUrl && (
             <a
-              href={job.ExternalApplyUrl}
+              href={
+                job.ExternalApplyUrl.includes("@") &&
+                !job.ExternalApplyUrl.startsWith("mailto:") &&
+                !job.ExternalApplyUrl.startsWith("http")
+                  ? `mailto:${job.ExternalApplyUrl}`
+                  : job.ExternalApplyUrl
+              }
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2.5 p-3 bg-gray-800/60 rounded-xl hover:bg-gray-800 transition-colors group"

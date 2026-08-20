@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   Search,
   X,
@@ -28,17 +28,22 @@ import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import Image from "next/image";
 import Link from "next/link";
 import { AdminPremiumJob } from "@/client/adminClient";
-import { useAdminPremiumJobs, useDeleteAdminPremiumJob, useUpdateAdminPremiumJobStatus } from "@/hooks/useAdmin";
+import {
+  useAdminPremiumJobs,
+  useDeleteAdminPremiumJob,
+  useUpdateAdminPremiumJobStatus,
+} from "@/hooks/useAdmin";
 
 const PAGE_SIZE = 20;
+const TELEGRAM_CONTACT = "https://t.me/Developer_coder1";
 
 const JOB_STATUS: Record<number, { label: string; color: string }> = {
   0: { label: "Draft", color: "bg-gray-700 text-gray-400" },
-  1: {label: "Pending Approval", color: "bg-green-400/15 text-green-400" },
+  1: { label: "Pending Approval", color: "bg-green-400/15 text-green-400" },
   2: { label: "Active", color: "bg-green-400/15 text-green-400" },
   3: { label: "Paused", color: "bg-amber-400/15 text-amber-400" },
   4: { label: "Closed", color: "bg-red-400/15 text-red-400" },
-  5 : { label: "Rejected", color: "bg-red-400/15 text-red-400" },
+  5: { label: "Rejected", color: "bg-red-400/15 text-red-400" },
 };
 
 const WORK_MODE: Record<number, string> = {
@@ -56,6 +61,32 @@ const formatSalary = (min: number, max: number, currency: string) => {
         : String(n);
   return `${currency} ${fmt(min)}–${fmt(max)}`;
 };
+
+function ActivationContact({ activationEmail }: { activationEmail: string | null }) {
+  return (
+    <p className="text-xs mt-2 text-gray-400">
+      {activationEmail && (
+        <>
+          <a
+            href={`mailto:${activationEmail}`}
+            className="text-violet-300 font-semibold underline underline-offset-2"
+          >
+            {activationEmail}
+          </a>
+          <span className="mx-2">•</span>
+        </>
+      )}
+      <a
+        href={TELEGRAM_CONTACT}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-violet-300 font-semibold underline underline-offset-2"
+      >
+        {TELEGRAM_CONTACT}
+      </a>
+    </p>
+  );
+}
 
 // ─── Delete confirm ───────────────────────────────────────────────────────
 
@@ -88,12 +119,14 @@ function DeleteConfirmModal({
             </p>
           </div>
         </div>
-        <p className="text-xs text-gray-400 mb-5 px-1">
-          <span className="text-white font-medium">{job.title}</span> and all
-          associated applications will be permanently deleted.
+
+        <p className="text-xs text-gray-500 mb-5">
+          {job.title}
         </p>
+
         <div className="flex gap-2">
           <button
+            type="button"
             onClick={onCancel}
             disabled={isPending}
             className="flex-1 h-9 rounded-xl border border-gray-700 text-sm text-gray-300 hover:bg-gray-800 transition-colors disabled:opacity-50"
@@ -101,6 +134,7 @@ function DeleteConfirmModal({
             Cancel
           </button>
           <button
+            type="button"
             onClick={onConfirm}
             disabled={isPending}
             className="flex-1 h-9 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
@@ -313,7 +347,13 @@ function DetailModal({
           {/* External URL */}
           {job.external_apply_url && (
             <a
-              href={job.external_apply_url}
+              href={
+                job.external_apply_url.includes("@") &&
+                !job.external_apply_url.startsWith("mailto:") &&
+                !job.external_apply_url.startsWith("http")
+                  ? `mailto:${job.external_apply_url}`
+                  : job.external_apply_url
+              }
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2.5 p-3 bg-gray-800/60 rounded-xl hover:bg-gray-800 transition-colors group"
@@ -402,7 +442,15 @@ export default function AdminPremiumJobsPage() {
   const [deleteTarget, setDeleteTarget] = useState<AdminPremiumJob | null>(
     null,
   );
+  const [activationEmail, setActivationEmail] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+
+  useEffect(() => {
+    fetch("/api/app-config")
+      .then((r) => r.json())
+      .then((data) => setActivationEmail(data.activationEmail ?? null))
+      .catch(() => setActivationEmail(null));
+  }, []);
 
   const { data, isLoading, isFetching } = useAdminPremiumJobs(
     page,
@@ -458,6 +506,7 @@ export default function AdminPremiumJobsPage() {
                 <span className="ml-2 text-violet-400">Updating…</span>
               )}
             </p>
+            <ActivationContact activationEmail={activationEmail} />
           </div>
 
           <div className="flex items-center gap-2 ml-auto">

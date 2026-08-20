@@ -98,9 +98,76 @@ export const getAdminJobSeekers = async (
 
 export const deleteAdminUser = async (userId: string): Promise<void> => {
   const supabase = getAdminClient();
-  const { error } = await supabase.auth.admin.deleteUser(userId);
-  if (error) throw new Error(error.message);
-  await supabase.from("users").delete().eq("id", userId);
+
+  // 1. Load user to inspect role and existence
+  const { data: userRow, error: userError } = await supabase
+    .from("users")
+    .select("id, role")
+    .eq("id", userId)
+    .single<{ id: string; role: number }>();
+
+  if (userError || !userRow) {
+    throw new Error(userError?.message ?? "User not found");
+  }
+
+  // 2. Delete dependent records in a safe, explicit order.
+  //    Known dependent tables in this codebase:
+  //    - referrals (user_id)
+  //    - jobs (company_id, posted_by)
+  //    We remove records that directly reference this user to avoid FK errors.
+
+  // Delete referrals where this user is referenced
+  const { error: delRefError } = await supabase
+    .from("referrals")
+    .delete()
+    .eq("user_id", userId);
+  if (delRefError) {
+    // Log and surface the error
+    console.error("Failed to delete referrals for user", userId, delRefError);
+    throw new Error(
+      `Failed to delete dependent referrals: ${delRefError.message}`,
+    );
+  }
+
+  // If the user is a company, delete their jobs first
+  // role: 1 === Company (see model/userModel.ts)
+  if (userRow.role === 1) {
+    const { error: delJobsError } = await supabase
+      .from("jobs")
+      .delete()
+      .or(`company_id.eq.${userId},posted_by.eq.${userId}`);
+    if (delJobsError) {
+      console.error("Failed to delete jobs for company user", userId, delJobsError);
+      throw new Error(`Failed to delete dependent jobs: ${delJobsError.message}`);
+    }
+  } else {
+    // If job seeker or other roles, remove any job-related references where applicable
+    const { error: delPostedError } = await supabase
+      .from("jobs")
+      .delete()
+      .eq("posted_by", userId);
+    if (delPostedError) {
+      console.error("Failed to delete posted jobs for user", userId, delPostedError);
+      throw new Error(`Failed to delete dependent jobs: ${delPostedError.message}`);
+    }
+  }
+
+  // 3. Finally, delete the users row from the database
+  const { error: dbDeleteError } = await supabase
+    .from("users")
+    .delete()
+    .eq("id", userId);
+  if (dbDeleteError) {
+    console.error("Failed to delete users row", userId, dbDeleteError);
+    throw new Error(`Failed to delete user row: ${dbDeleteError.message}`);
+  }
+
+  // 4. Remove the Supabase auth user (service role)
+  const { error: authError } = await supabase.auth.admin.deleteUser(userId);
+  if (authError) {
+    console.error("Failed to delete auth user", userId, authError);
+    throw new Error(`Failed to delete auth user: ${authError.message}`);
+  }
 };
 
 // ─── Companies ────────────────────────────────────────────────────────────

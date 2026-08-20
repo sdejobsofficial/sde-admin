@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useRef, useImperativeHandle, forwardRef } from "react";
+import {
+  useState,
+  useRef,
+  useImperativeHandle,
+  forwardRef,
+  useEffect,
+} from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -70,6 +76,8 @@ import {
   JobStatus,
 } from "@/model/userModel";
 
+const TELEGRAM_CONTACT = "https://t.me/Developer_coder1";
+
 const BASICS_DEFAULTS: BasicsValues = {
   title: "",
   description: "",
@@ -78,6 +86,32 @@ const BASICS_DEFAULTS: BasicsValues = {
   job_type: JobType.FullTime,
   work_mode: WorkMode.Remote,
 };
+
+function ActivationContact({ activationEmail }: { activationEmail: string | null }) {
+  return (
+    <p className="text-xs mt-3 text-gray-400">
+      {activationEmail && (
+        <>
+          <a
+            href={`mailto:${activationEmail}`}
+            className="text-violet-300 font-semibold underline underline-offset-2"
+          >
+            {activationEmail}
+          </a>
+          <span className="mx-2">•</span>
+        </>
+      )}
+      <a
+        href={TELEGRAM_CONTACT}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-violet-300 font-semibold underline underline-offset-2"
+      >
+        {TELEGRAM_CONTACT}
+      </a>
+    </p>
+  );
+}
 
 const BasicsStep = forwardRef<
   StepHandle,
@@ -969,6 +1003,14 @@ export default function AdminPremiumJobForm({
 }: AdminPremiumJobFormProps) {
   const [stepIdx, setStepIdx] = useState(0);
   const [submitted, setSubmitted] = useState(false);
+  const [activationEmail, setActivationEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/app-config")
+      .then((r) => r.json())
+      .then((data) => setActivationEmail(data.activationEmail ?? null))
+      .catch(() => setActivationEmail(null));
+  }, []);
 
   // Accumulated validated data per step
   const [basicsData, setBasicsData] = useState<BasicsValues>(BASICS_DEFAULTS);
@@ -1110,6 +1152,7 @@ export default function AdminPremiumJobForm({
               This job will include an embedded company snapshot visible to all
               candidates.
             </p>
+            <ActivationContact activationEmail={activationEmail} />
           </div>
         </div>
       </aside>
