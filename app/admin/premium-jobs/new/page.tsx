@@ -735,16 +735,20 @@ const CompanyStep = forwardRef<
           <FieldError message={errors.website?.message} />
         </div>
 
-        {/* External apply URL */}
+        {/* External apply URL / email */}
         <div>
-          <FieldLabel required>External apply URL</FieldLabel>
+          <FieldLabel required>Apply Link or Email</FieldLabel>
           <Input
             {...register("external_apply_url")}
-            placeholder="https://yourcompany.com/careers/role"
+            placeholder="https://company.com/apply  or  hr@company.com"
             icon={LinkIcon}
             hasError={!!errors.external_apply_url}
           />
           <FieldError message={errors.external_apply_url?.message} />
+          <p className="text-xs text-gray-600 mt-1">
+            Accepts a URL (https://…) or an email address — email addresses are
+            automatically converted to mailto: links for candidates.
+          </p>
         </div>
 
         {/* Application deadline */}

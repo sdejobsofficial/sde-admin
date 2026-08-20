@@ -344,15 +344,18 @@ function DetailModal({
             </div>
           )}
 
-          {/* External URL */}
+          {/* External URL / Apply link */}
           {job.external_apply_url && (
             <a
               href={
-                job.external_apply_url.includes("@") &&
-                !job.external_apply_url.startsWith("mailto:") &&
-                !job.external_apply_url.startsWith("http")
-                  ? `mailto:${job.external_apply_url}`
-                  : job.external_apply_url
+                // mailto: links are already normalized at save time; but handle
+                // legacy bare-email values too
+                job.external_apply_url.startsWith("mailto:") ||
+                job.external_apply_url.startsWith("http")
+                  ? job.external_apply_url
+                  : job.external_apply_url.includes("@")
+                    ? `mailto:${job.external_apply_url}`
+                    : job.external_apply_url
               }
               target="_blank"
               rel="noopener noreferrer"
@@ -363,7 +366,9 @@ function DetailModal({
                 className="text-violet-400 flex-shrink-0"
               />
               <p className="text-xs font-medium text-gray-200 flex-1 truncate">
-                {job.external_apply_url.replace(/^https?:\/\//, "")}
+                {job.external_apply_url
+                  .replace(/^mailto:/, "")
+                  .replace(/^https?:\/\//, "")}
               </p>
               <ExternalLink
                 size={11}

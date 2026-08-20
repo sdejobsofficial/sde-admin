@@ -96,6 +96,27 @@ export const getAdminJobSeekers = async (
   return { data: mapped, total, hasMore: from + mapped.length < total };
 };
 
+/**
+ * Normalizes an apply link:
+ * - Plain email (e.g. hr@company.com) → mailto:hr@company.com
+ * - Already prefixed mailto: → unchanged
+ * - https:// URL → unchanged
+ * - Empty string → undefined
+ */
+export const normalizeApplyUrl = (value: string | undefined): string | undefined => {
+  if (!value || !value.trim()) return undefined;
+  const v = value.trim();
+  if (v.startsWith("mailto:") || v.startsWith("http://") || v.startsWith("https://")) {
+    return v;
+  }
+  // Plain email address
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (emailRegex.test(v)) {
+    return `mailto:${v}`;
+  }
+  return v;
+};
+
 export const deleteAdminUser = async (userId: string): Promise<void> => {
   const supabase = getAdminClient();
 
@@ -110,11 +131,23 @@ export const deleteAdminUser = async (userId: string): Promise<void> => {
     throw new Error(userError?.message ?? "User not found");
   }
 
-  // 2. Delete dependent records in a safe, explicit order.
-  //    Known dependent tables in this codebase:
+  // 2. Delete dependent records in safe, explicit order.
+  //    Dependent tables that reference users(id):
+  //    - job_applications (user_id) — applications submitted by this user
   //    - referrals (user_id)
-  //    - jobs (company_id, posted_by)
-  //    We remove records that directly reference this user to avoid FK errors.
+  //    - jobs (company_id, posted_by) — only for company accounts
+
+  // Delete job applications submitted by this user
+  const { error: delAppError } = await supabase
+    .from("job_applications")
+    .delete()
+    .eq("user_id", userId);
+  if (delAppError) {
+    console.error("Failed to delete job_applications for user", userId, delAppError);
+    throw new Error(
+      `Failed to delete dependent job applications: ${delAppError.message}`,
+    );
+  }
 
   // Delete referrals where this user is referenced
   const { error: delRefError } = await supabase
@@ -122,7 +155,6 @@ export const deleteAdminUser = async (userId: string): Promise<void> => {
     .delete()
     .eq("user_id", userId);
   if (delRefError) {
-    // Log and surface the error
     console.error("Failed to delete referrals for user", userId, delRefError);
     throw new Error(
       `Failed to delete dependent referrals: ${delRefError.message}`,
@@ -152,7 +184,7 @@ export const deleteAdminUser = async (userId: string): Promise<void> => {
     }
   }
 
-  // 3. Finally, delete the users row from the database
+  // 3. Delete the users row from the database
   const { error: dbDeleteError } = await supabase
     .from("users")
     .delete()
@@ -162,7 +194,7 @@ export const deleteAdminUser = async (userId: string): Promise<void> => {
     throw new Error(`Failed to delete user row: ${dbDeleteError.message}`);
   }
 
-  // 4. Remove the Supabase auth user (service role)
+  // 4. Remove the Supabase auth user (service role — server-side only)
   const { error: authError } = await supabase.auth.admin.deleteUser(userId);
   if (authError) {
     console.error("Failed to delete auth user", userId, authError);
@@ -457,17 +489,18 @@ export const createAdminPremiumJob = async (
   payload: CreatePremiumJobPayload,
 ): Promise<AdminPremiumJob> => {
   const supabase = getAdminClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
-  console.log(user?.id, "userid");
+  // Normalize the apply URL: convert plain emails to mailto: links
+  const normalizedPayload: CreatePremiumJobPayload = {
+    ...payload,
+    external_apply_url: normalizeApplyUrl(payload.external_apply_url),
+  };
 
   const { data, error } = await supabase
     .from("jobs")
     .insert([
       {
-        ...payload,
+        ...normalizedPayload,
         published_at: new Date().toISOString(),
         company_id: "cdd5bb29-4baa-4b24-a512-656c98032cca",
         posted_by: "cdd5bb29-4baa-4b24-a512-656c98032cca",
