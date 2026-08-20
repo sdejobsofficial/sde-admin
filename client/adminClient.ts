@@ -103,7 +103,7 @@ export const getAdminJobSeekers = async (
  * - https:// URL → unchanged
  * - Empty string → undefined
  */
-export const normalizeApplyUrl = (value: string | undefined): string | undefined => {
+const normalizeApplyUrl = (value: string | undefined): string | undefined => {
   if (!value || !value.trim()) return undefined;
   const v = value.trim();
   if (v.startsWith("mailto:") || v.startsWith("http://") || v.startsWith("https://")) {
@@ -133,43 +133,50 @@ export const deleteAdminUser = async (userId: string): Promise<void> => {
 
   // 2. Delete dependent records in safe, explicit order.
   //    Dependent tables that reference users(id):
-  //    - job_applications (user_id) — applications submitted by this user
+  //    - applications (applicant_id, company_id, referred_by)
+  //    - user_referrals (referred_user_id, referrer_user_id)
   //    - referrals (user_id)
-  //    - jobs (company_id, posted_by) — only for company accounts
+  //    - premium_orders (user_id)
+  //    - jobs (company_id, posted_by)
 
-  // Delete job applications submitted by this user
+  // Delete applications submitted by this user, or where they are the company, or referrer
   const { error: delAppError } = await supabase
-    .from("job_applications")
+    .from("applications")
     .delete()
-    .eq("user_id", userId);
+    .or(`applicant_id.eq.${userId},company_id.eq.${userId},referred_by.eq.${userId}`);
   if (delAppError) {
-    console.error("Failed to delete job_applications for user", userId, delAppError);
-    throw new Error(
-      `Failed to delete dependent job applications: ${delAppError.message}`,
-    );
+    console.error("Failed to delete applications for user", userId, delAppError);
+    throw new Error(`Failed to delete dependent applications: ${delAppError.message}`);
   }
 
-  // Delete user_referrals rows where this user appears as either the referrer or the referred user
+  // Delete user_referrals rows
   const { error: delRefError1 } = await supabase
     .from("user_referrals")
     .delete()
-    .eq("referred_user_id", userId);
+    .or(`referred_user_id.eq.${userId},referrer_user_id.eq.${userId}`);
   if (delRefError1) {
-    console.error("Failed to delete user_referrals (referred_user_id) for user", userId, delRefError1);
-    throw new Error(
-      `Failed to delete dependent user_referrals: ${delRefError1.message}`,
-    );
+    console.error("Failed to delete user_referrals for user", userId, delRefError1);
+    throw new Error(`Failed to delete dependent user_referrals: ${delRefError1.message}`);
   }
 
-  const { error: delRefError2 } = await supabase
-    .from("user_referrals")
+  // Delete referrals rows
+  const { error: delSalesRefError } = await supabase
+    .from("referrals")
     .delete()
-    .eq("referrer_id", userId);
-  if (delRefError2) {
-    console.error("Failed to delete user_referrals (referrer_id) for user", userId, delRefError2);
-    throw new Error(
-      `Failed to delete dependent user_referrals: ${delRefError2.message}`,
-    );
+    .eq("user_id", userId);
+  if (delSalesRefError) {
+    console.error("Failed to delete referrals for user", userId, delSalesRefError);
+    throw new Error(`Failed to delete dependent referrals: ${delSalesRefError.message}`);
+  }
+
+  // Delete premium_orders
+  const { error: delPremiumOrdersError } = await supabase
+    .from("premium_orders")
+    .delete()
+    .eq("user_id", userId);
+  if (delPremiumOrdersError) {
+    console.error("Failed to delete premium_orders for user", userId, delPremiumOrdersError);
+    throw new Error(`Failed to delete dependent premium_orders: ${delPremiumOrdersError.message}`);
   }
 
   // If the user is a company, delete their jobs first
@@ -283,10 +290,7 @@ export const updateCompanyVerification = async (
 };
 
 export const deleteAdminCompany = async (companyId: string): Promise<void> => {
-  const supabase = getAdminClient();
-  const { error } = await supabase.auth.admin.deleteUser(companyId);
-  if (error) throw new Error(error.message);
-  await supabase.from("users").delete().eq("id", companyId);
+  return deleteAdminUser(companyId);
 };
 
 // ─── Jobs ─────────────────────────────────────────────────────────────────
