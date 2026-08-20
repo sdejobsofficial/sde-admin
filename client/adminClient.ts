@@ -149,15 +149,26 @@ export const deleteAdminUser = async (userId: string): Promise<void> => {
     );
   }
 
-  // Delete referrals where this user is referenced
-  const { error: delRefError } = await supabase
-    .from("referrals")
+  // Delete user_referrals rows where this user appears as either the referrer or the referred user
+  const { error: delRefError1 } = await supabase
+    .from("user_referrals")
     .delete()
-    .eq("user_id", userId);
-  if (delRefError) {
-    console.error("Failed to delete referrals for user", userId, delRefError);
+    .eq("referred_user_id", userId);
+  if (delRefError1) {
+    console.error("Failed to delete user_referrals (referred_user_id) for user", userId, delRefError1);
     throw new Error(
-      `Failed to delete dependent referrals: ${delRefError.message}`,
+      `Failed to delete dependent user_referrals: ${delRefError1.message}`,
+    );
+  }
+
+  const { error: delRefError2 } = await supabase
+    .from("user_referrals")
+    .delete()
+    .eq("referrer_id", userId);
+  if (delRefError2) {
+    console.error("Failed to delete user_referrals (referrer_id) for user", userId, delRefError2);
+    throw new Error(
+      `Failed to delete dependent user_referrals: ${delRefError2.message}`,
     );
   }
 
