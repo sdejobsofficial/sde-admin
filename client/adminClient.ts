@@ -710,7 +710,11 @@ export const getAdminPremiumPlusUsers = async (
 
   const mapped = data.map(mapJobSeekerRow);
 
-  // 2. On page 1, inject whitelisted users not already returned by the DB query
+  // 2. On page 1, inject whitelisted users not already returned by the DB query.
+  //    NOTE: We do NOT filter by role here — the permanent account may be an
+  //    admin/CEO whose role is NOT UserRole.JobSeeker. We only restrict by the
+  //    explicit PERMANENT_PREMIUM_EMAILS list, not by role.
+  let injectedCount = 0;
   if (page === 1) {
     const dbEmails = new Set(mapped.map((u) => u.Email));
     const missingEmails = PERMANENT_PREMIUM_EMAILS.filter((email) => {
@@ -720,10 +724,10 @@ export const getAdminPremiumPlusUsers = async (
     });
 
     if (missingEmails.length > 0) {
+      // Fetch by email only — no role restriction so admin/CEO accounts are found.
       const { data: whitelistRows } = await supabase
         .from("users")
         .select("id, name, email, phone, meta, created_at")
-        .eq("role", UserRole.JobSeeker)
         .in("email", missingEmails)
         .returns<RawUserRow[]>();
 
@@ -734,10 +738,13 @@ export const getAdminPremiumPlusUsers = async (
           IsPermanentPremium: true as const,
         }));
         mapped.unshift(...whitelistMapped);
+        injectedCount = whitelistMapped.length;
       }
     }
   }
 
-  const total = count ?? 0;
+  // Adjust total to include any injected permanent users that were not already
+  // counted by the DB query (which filters role = JobSeeker).
+  const total = (count ?? 0) + injectedCount;
   return { data: mapped, total, hasMore: from + mapped.length < total };
 };
