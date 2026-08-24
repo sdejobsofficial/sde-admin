@@ -169,6 +169,7 @@ export interface AdminJobSeeker {
   ApplicationsUsed?: number;
   ApplicationsLimit?: number;
   IsPremiumPlus?: boolean; // ← add this
+  IsPermanentPremium?: boolean; // hardcoded whitelist — cannot be revoked
 }
 
 export interface AdminCompany {

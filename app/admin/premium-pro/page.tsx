@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   Eye,
   Sparkles,
+  Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -596,6 +597,11 @@ export default function AdminPremiumProUsersPage() {
                             <span className="text-[9px] bg-violet-500/10 text-violet-400 border border-violet-500/20 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide">
                               Pro
                             </span>
+                            {u.IsPermanentPremium && (
+                              <span className="text-[9px] bg-amber-400/10 text-amber-400 border border-amber-400/20 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide flex items-center gap-0.5">
+                                <Lock size={7} /> Permanent
+                              </span>
+                            )}
                           </div>
                           <p className="text-xs text-gray-500">{u.Email}</p>
                         </div>
@@ -644,13 +650,15 @@ export default function AdminPremiumProUsersPage() {
                         >
                           <Eye size={13} />
                         </button>
-                        <button
-                          onClick={() => setRevokeTarget(u)}
-                          className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-orange-400 hover:bg-orange-400/10 transition-all"
-                          title="Revoke Premium Pro"
-                        >
-                          <AlertTriangle size={13} />
-                        </button>
+                        {!u.IsPermanentPremium && (
+                          <button
+                            onClick={() => setRevokeTarget(u)}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-orange-400 hover:bg-orange-400/10 transition-all"
+                            title="Revoke Premium Pro"
+                          >
+                            <AlertTriangle size={13} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

@@ -123,12 +123,18 @@ export const deleteAdminUser = async (userId: string): Promise<void> => {
   // 1. Load user to inspect role and existence
   const { data: userRow, error: userError } = await supabase
     .from("users")
-    .select("id, role")
+    .select("id, role, email")
     .eq("id", userId)
-    .single<{ id: string; role: number }>();
+    .single<{ id: string; role: number; email: string }>();
 
   if (userError || !userRow) {
     throw new Error(userError?.message ?? "User not found");
+  }
+
+  // Protection against deleting permanent admin accounts
+  const PROTECTED_EMAILS = ["refernest97@gmail.com"];
+  if (PROTECTED_EMAILS.includes(userRow.email)) {
+    throw new Error("Cannot delete protected admin account");
   }
 
   // 2. Delete dependent records in safe, explicit order.
@@ -665,6 +671,10 @@ export const togglePremiumPlus = async (userId: string): Promise<boolean> => {
   return newIsPremiumPlus;
 };
 
+// Emails permanently granted Premium Pro via the frontend whitelist.
+// Their DB flag may not be set, so we fetch and inject them manually.
+const PERMANENT_PREMIUM_EMAILS = ["refernest97@gmail.com"];
+
 export const getAdminPremiumPlusUsers = async (
   page = 1,
   pageSize = 20,
@@ -674,16 +684,17 @@ export const getAdminPremiumPlusUsers = async (
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
+  const isUuid = (v: string) =>
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+
+  // 1. Fetch DB-flagged premium plus users (paginated)
   let query = supabase
     .from("users")
     .select("id, name, email, phone, meta, created_at", { count: "exact" })
     .eq("role", UserRole.JobSeeker)
-    .eq("meta->subscription->>is_premium_plus", "true")
+    .eq("meta->subscription->is_premium_plus", "true")
     .order("created_at", { ascending: false })
     .range(from, to);
-
-  const isUuid = (v: string) =>
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 
   if (search) {
     const orParts = [`name.ilike.%${search}%`, `email.ilike.%${search}%`];
@@ -698,6 +709,35 @@ export const getAdminPremiumPlusUsers = async (
   }
 
   const mapped = data.map(mapJobSeekerRow);
+
+  // 2. On page 1, inject whitelisted users not already returned by the DB query
+  if (page === 1) {
+    const dbEmails = new Set(mapped.map((u) => u.Email));
+    const missingEmails = PERMANENT_PREMIUM_EMAILS.filter((email) => {
+      if (dbEmails.has(email)) return false;
+      if (search) return email.toLowerCase().includes(search.toLowerCase());
+      return true;
+    });
+
+    if (missingEmails.length > 0) {
+      const { data: whitelistRows } = await supabase
+        .from("users")
+        .select("id, name, email, phone, meta, created_at")
+        .eq("role", UserRole.JobSeeker)
+        .in("email", missingEmails)
+        .returns<RawUserRow[]>();
+
+      if (whitelistRows && whitelistRows.length > 0) {
+        const whitelistMapped = whitelistRows.map((row) => ({
+          ...mapJobSeekerRow(row),
+          IsPremiumPlus: true as const,
+          IsPermanentPremium: true as const,
+        }));
+        mapped.unshift(...whitelistMapped);
+      }
+    }
+  }
+
   const total = count ?? 0;
   return { data: mapped, total, hasMore: from + mapped.length < total };
 };
